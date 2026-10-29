@@ -1,0 +1,13 @@
+.venv
+.env
+.git
+tests
+evals
+docs
+terraform
+__pycache__
+*.egg-info
+.pytest_cache
+.ruff_cache
+.playwright-mcp
+deploy.env

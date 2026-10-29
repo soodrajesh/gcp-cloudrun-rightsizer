@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cloud Run Rightsizer</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#14181f;--mute:#5d6674;--line:#e2e5ea;--accent:#2a5bd7;--bad:#b3261e;--warn:#a16207;--ok:#157f4b;--chip:#eef1f5}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1218;--panel:#171b23;--ink:#e8ebf0;--mute:#98a1b0;--line:#2a303b;--accent:#7aa2ff;--bad:#ff8a80;--warn:#facc15;--ok:#5fd39a;--chip:#232936}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:14px 24px;background:var(--panel);border-bottom:1px solid var(--line)}header h1{font-size:17px;margin:0;font-weight:650}.badges{margin-left:auto;display:flex;gap:8px}
+.badge{font-size:12px;padding:2px 9px;border:1px solid var(--line);border-radius:999px;color:var(--mute);background:var(--bg)}
+main{display:grid;grid-template-columns:320px 1fr;gap:20px;padding:20px 24px;max-width:1300px;margin:auto}@media(max-width:960px){main{grid-template-columns:1fr;padding:16px}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}.card h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:0 0 10px;font-weight:600}
+label{display:block;font-size:12px;color:var(--mute);margin:8px 0 3px}select,input{font:inherit;color:var(--ink);width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px}
+button{font:inherit;background:var(--accent);color:#fff;border:0;border-radius:6px;padding:8px 14px;font-weight:600;cursor:pointer;margin-top:12px;width:100%}button:disabled{opacity:.5;cursor:wait}
+.hist{list-style:none;margin:0;padding:0}.hist li{display:flex;gap:8px;align-items:center;padding:7px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:6px}.hist li:hover,.hist li.sel{background:var(--bg)}
+.banner{display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding:16px 18px;border-radius:10px;margin-bottom:16px;border:1px solid var(--line);background:var(--panel)}.big{font-size:26px;font-weight:750;color:var(--ok)}.big.neutral{color:var(--ink)}.big.bad{color:var(--bad)}
+.m{color:var(--mute);font-size:13px}.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:1000px){.cols{grid-template-columns:1fr}}
+.col{border:1px solid var(--line);border-radius:8px;padding:12px}.col h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;color:var(--mute)}.price{font-size:24px;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 6px;text-align:left;border-bottom:1px solid var(--line)}th{font-size:11px;text-transform:uppercase;color:var(--mute)}
+.chg{background:color-mix(in srgb,var(--warn) 22%,transparent);border-radius:4px;padding:0 4px;font-weight:600}.good{color:var(--ok)}.bad{color:var(--bad)}
+.f{border-left:4px solid var(--warn);padding:6px 10px;margin:8px 0;background:var(--bg);border-radius:0 6px 6px 0}.f.high{border-color:var(--bad)}.f.info,.f.low{border-color:var(--mute)}
+.cmd{font:11px ui-monospace,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:4px 0;word-break:break-all;white-space:pre-wrap}
+.err{color:var(--bad);font-size:13px;margin-top:8px}.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn);padding:8px 12px;border-radius:8px;margin-bottom:10px;font-size:13px}
+svg.spark{width:100%;height:60px;background:var(--bg);border-radius:6px}
+</style>
+</head>
+<body>
+<header><h1>Cloud Run Rightsizer</h1><span class="badge">simulate real traffic · cheapest config that meets your SLO</span><div class="badges" id="badges"></div></header>
+<main>
+<aside>
+ <div class="card"><h2>Analyze</h2>
+  <label>Sample service (synthetic)</label><select id="sample"></select>
+  <div id="livebox" style="display:none"><label>…or a live service (read-only)</label><input id="svc" placeholder="project/service"></div>
+  <label>Max cold-start share of requests (%)</label><input id="cold" type="number" step="0.1" value="1">
+  <label>Model commentary</label><select id="llm"></select>
+  <button id="go">Recommend</button><button id="golive" style="display:none;background:var(--chip);color:var(--ink)">Analyze live service</button><div class="err" id="err"></div></div>
+ <div class="card"><h2>Recent</h2><ul class="hist" id="hist"></ul></div>
+</aside>
+<section id="out"><div class="card m" style="padding:40px;text-align:center">Choose a sample service and run the analysis.</div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let cfg={},cur=null;
+async function api(p,o){const r=await fetch(p,o);const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(b.detail||r.statusText);return b}
+async function init(){cfg=await api("/api/config");$("badges").innerHTML=`<span class="badge">model: ${esc(cfg.provider)}</span><span class="badge">spend $${cfg.spend_today_usd.toFixed(4)}/$${cfg.daily_budget_usd.toFixed(2)}</span>`;
+ $("llm").innerHTML=cfg.allowed_providers.map(p=>`<option ${p===cfg.provider?"selected":""}>${esc(p)}</option>`).join("");
+ const n=await api("/api/samples");$("sample").innerHTML=n.map(x=>`<option>${esc(x)}</option>`).join("");
+ if(cfg.live_projects.length){$("livebox").style.display="";$("golive").style.display="";$("svc").value=cfg.live_projects[0]+"/"}
+ $("go").onclick=()=>run({sample:$("sample").value});
+ $("golive").onclick=()=>{const [project,service]=$("svc").value.split("/");run({live:{project,service,region:"us-central1",hours:24}})};
+ await hist();const h=location.hash.slice(1);if(h)show(await api("/api/recommendations/"+h))}
+async function hist(){const rows=await api("/api/recommendations?limit=15");$("hist").innerHTML=rows.map(r=>`<li data-id="${esc(r.id)}" class="${cur===r.id?"sel":""}"><b>${esc(r.service)}</b><span class="m">${r.saving_month_usd>0?"−$"+r.saving_month_usd.toFixed(0)+"/mo":"no change"}</span></li>`).join("")||`<li class="m" style="cursor:default">none yet</li>`;
+ document.querySelectorAll("#hist li[data-id]").forEach(li=>li.onclick=async()=>show(await api("/api/recommendations/"+li.dataset.id)))}
+async function run(src){$("err").textContent="";$("go").disabled=$("golive").disabled=true;$("go").textContent="Simulating…";
+ try{const r=await api("/api/recommendations",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...src,llm:$("llm").value,slo:{max_cold_start_fraction:+$("cold").value/100}})});show(r);await hist()}
+ catch(e){$("err").textContent=e.message}finally{$("go").disabled=$("golive").disabled=false;$("go").textContent="Recommend"}}
+function spark(a){const mx=Math.max(...a,1),w=480,h=60;const pts=a.map((v,i)=>`${(i/(a.length-1||1))*w},${h-4-(v/mx)*(h-10)}`).join(" ");return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline fill="none" stroke="var(--accent)" stroke-width="1.5" points="${pts}"/></svg>`}
+const fields=[["cpu","vCPU",v=>v],["memory_gib","Memory (GiB)",v=>v],["concurrency","Concurrency",v=>v],["min_instances","Min instances",v=>v],["max_instances","Max instances",v=>v],["cpu_idle","Billing",v=>v?"request-based":"instance-based"],["startup_cpu_boost","Startup CPU boost",v=>v?"on":"off"]];
+function col(title,c,other,isBest){const x=c.config,r=c.result;
+ return `<div class="col"><h3>${title}</h3><div class="price">$${c.monthly_usd.toFixed(2)}<span class="m"> / month</span></div>
+ <table>${fields.map(([k,l,f])=>`<tr><td class="m">${l}</td><td>${isBest&&x[k]!==other.config[k]?`<span class="chg">${esc(f(x[k]))}</span>`:esc(f(x[k]))}</td></tr>`).join("")}</table>
+ <table style="margin-top:8px"><tr><td class="m">Cold-start share</td><td>${(r.cold_start_fraction*100).toFixed(2)}%</td></tr><tr><td class="m">p95 latency</td><td>${r.p95_ms.toFixed(0)} ms</td></tr><tr><td class="m">Peak instances</td><td>${r.peak_instances}</td></tr><tr><td class="m">Dropped</td><td>${(r.drop_fraction*100).toFixed(2)}%</td></tr></table>
+ <div style="margin-top:6px" class="${c.feasible?"good":"bad"}">${c.feasible?"✓ meets the SLO":"✗ "+esc(c.violations.join("; "))}</div></div>`}
+function show(r){cur=r.id;location.hash=r.id;const sv=r.saving_month_usd;
+ $("out").innerHTML=`<div class="banner"><div><div class="big ${sv>0?"":"neutral"} ${!r.current.feasible?"bad":""}">${!r.best.feasible?"No config meets the SLO":!r.current.feasible?"Current settings miss the SLO":sv>0?"Save $"+sv.toFixed(2)+" / month ("+r.saving_pct.toFixed(0)+"%)":"Already optimal"}</div><div class="m">${esc(r.service)} · ${esc(r.source)} · ${(r.duration_ms/1000).toFixed(1)}s</div></div></div>
+ <div class="card"><h2>Summary</h2>${esc(r.summary)}${r.note?`<div class="m" style="margin-top:6px"><b>${esc(r.model)} note:</b> ${esc(r.note)}</div>`:""}</div>${r.degraded.map(d=>`<div class="warn">⚠ ${esc(d)}</div>`).join("")}
+ <div class="card"><h2>Traffic in the analysed window (requests, bucketed)</h2>${spark(r.traffic_preview)}</div>
+ <div class="card"><h2>Current vs recommended (simulated on this traffic)</h2><div class="cols">${col("Current",r.current,r.current,false)}${col("Recommended",r.best,r.current,true)}</div></div>
+ ${r.findings.length?`<div class="card"><h2>Findings</h2>${r.findings.map(f=>`<div class="f ${f.severity}"><b>${esc(f.id)}</b> ${esc(f.title)}${f.detail?`<div class="m">${esc(f.detail)}</div>`:""}</div>`).join("")}</div>`:""}
+ ${r.commands.length?`<div class="card"><h2>Apply</h2>${r.commands.map(c=>`<div class="cmd">${esc(c)}</div>`).join("")}<div class="cmd">${esc(r.terraform)}</div></div>`:""}
+ ${r.alternatives.length?`<div class="card"><h2>Other feasible options</h2><table><thead><tr><th>$ / month</th><th>vCPU</th><th>GiB</th><th>conc</th><th>min</th><th>max</th><th>billing</th><th></th></tr></thead><tbody>${r.alternatives.map(a=>`<tr><td>$${a.monthly_usd.toFixed(2)}</td><td>${a.config.cpu}</td><td>${a.config.memory_gib}</td><td>${a.config.concurrency}</td><td>${a.config.min_instances}</td><td>${a.config.max_instances}</td><td>${a.config.cpu_idle?"request":"instance"}</td><td class="m">${a.violations.length?esc(a.violations[0]):""}</td></tr>`).join("")}</tbody></table></div>`:""}
+ ${r.dropped.length?`<div class="card"><h2>Rejected model output</h2>${r.dropped.map(d=>`<div class="m">✗ ${esc(d.item)} — ${esc(d.reason)}</div>`).join("")}</div>`:""}
+ <div class="card"><h2>Assumptions</h2><div class="m">Idle instances removed after ${r.assumptions.idle_timeout_s}s · per-request CPU demand ${r.assumptions.cpu_demand_vcpu_per_request} vCPU · free tier ignored · window ${r.assumptions.window_s}s scaled to 30 days${(r.assumptions.notes||[]).map(n=>" · "+esc(n)).join("")}</div></div>`;
+ document.querySelectorAll("#hist li").forEach(li=>li.classList.toggle("sel",li.dataset.id===r.id))}
+init().catch(e=>{$("err").textContent=e.message});
+</script>
+</body>
+</html>

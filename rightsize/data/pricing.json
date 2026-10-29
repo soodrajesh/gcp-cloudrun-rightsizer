@@ -1,0 +1,15 @@
+{
+  "source": "Cloud Billing Catalog API, service 152E-C115-5142 (Cloud Run), currency USD",
+  "retrieved": "2026-10-29",
+  "regenerate": "python scripts/fetch_pricing.py",
+  "regions": {
+    "us-central1": {
+      "tier": 1,
+      "request_based": {"cpu_per_vcpu_s": 0.000024, "mem_per_gib_s": 0.0000025},
+      "instance_based": {"cpu_per_vcpu_s": 0.000018, "mem_per_gib_s": 0.000002},
+      "min_instance_idle": {"cpu_per_vcpu_s": 0.0000025, "mem_per_gib_s": 0.0000025},
+      "per_million_requests": 0.40,
+      "free_requests_per_month": 2000000
+    }
+  }
+}

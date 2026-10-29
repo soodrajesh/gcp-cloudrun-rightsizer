@@ -1,0 +1,42 @@
+[project]
+name = "rightsize"
+version = "0.1.0"
+description = "Cloud Run right-sizing: simulate configs against real traffic and recommend the cheapest that meets a latency target"
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.115", "uvicorn>=0.30", "pydantic>=2.7", "httpx>=0.27", "google-auth>=2.30", "requests>=2.31", "google-genai>=1.0"]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "pytest-timeout", "ruff"]
+openai = ["openai>=1.50"]  # test/eval-only provider; never installed in the deployed image
+
+[project.scripts]
+rightsize = "rightsize.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["rightsize"]
+
+[tool.setuptools.package-data]
+rightsize = ["*.html", "samples/*.json"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+timeout = 30
+testpaths = ["tests"]
+markers = [
+  "live_vertex: calls Gemini on Vertex AI; opt-in via RIGHTSIZE_LIVE_VERTEX=1",
+  "live_openai: calls OpenAI; opt-in via RIGHTSIZE_LIVE_OPENAI=1",
+  "live_gcp: reaches a deployed firewall; opt-in via RIGHTSIZE_LIVE_URL=<url>",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
