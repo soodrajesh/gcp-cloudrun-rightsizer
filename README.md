@@ -22,6 +22,12 @@ live service (Admin API + Monitoring) or snapshot.json
 The simulator decides; models only phrase and propose. The numbers a model may quote must appear in the analysis, links are rejected, and a proposed
 configuration is checked as a legal Cloud Run configuration, simulated, and listed only if it meets the SLO and is cheaper.
 
+## Architecture
+
+[![Architecture: private Cloud Run service, engine, read-only sources, optional Gemini, up.sh delivery](docs/img/architecture.png)](docs/img/architecture.svg)
+
+Regenerate with `python3 docs/diagrams/architecture.py` then `python3 docs/diagrams/render.py docs/img/architecture.svg docs/img/architecture.png` (needs Playwright).
+
 ## Quick start
 
 ```bash

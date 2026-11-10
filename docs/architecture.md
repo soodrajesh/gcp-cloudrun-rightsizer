@@ -1,5 +1,7 @@
 # Architecture
 
+[![Architecture diagram](img/architecture.png)](img/architecture.svg)
+
 ```
 live service (Cloud Run Admin API + Cloud Monitoring)  or  snapshot.json
       |   [collector]  config: cpu, memory, concurrency, min/max, billing mode, boost
